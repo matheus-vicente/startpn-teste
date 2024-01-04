@@ -1,0 +1,82 @@
+import { makeClientShipper } from "test/factories/make-client-shipper";
+import { InMemoryClientsRepository } from "test/repositories/in-memory-clients-repository";
+import { UniqueEntityId } from "@/core/entities/unique-entity-id";
+import { ResourceNotFoundError } from "@/core/errors/errors/resource-not-found-error";
+import { ResourceAlreadyStoredError } from "@/core/errors/errors/resource-already-stored-error";
+import { EditClientShipperUseCase } from "./edit-client-shipper";
+import { InMemoryFieldValuesRepository } from "test/repositories/in-memory-field-values-repository";
+
+let inMemoryFieldValuesRepository: InMemoryFieldValuesRepository;
+let inMemoryClientsRepository: InMemoryClientsRepository;
+let sut: EditClientShipperUseCase;
+
+describe("Edit Customer Shipper", () => {
+  beforeEach(() => {
+    inMemoryFieldValuesRepository = new InMemoryFieldValuesRepository();
+    inMemoryClientsRepository = new InMemoryClientsRepository(
+      inMemoryFieldValuesRepository,
+    );
+
+    sut = new EditClientShipperUseCase(inMemoryClientsRepository);
+  });
+
+  it("should be able to edit a customer shipper", async () => {
+    await inMemoryClientsRepository.create(
+      makeClientShipper(
+        { name: "Custom Name" },
+        new UniqueEntityId("custom-id"),
+      ),
+    );
+
+    const result = await sut.execute({
+      id: "custom-id",
+      name: "Another Name Test",
+    });
+
+    expect(result.isRight()).toBe(true);
+    expect(inMemoryClientsRepository.items[0]).toMatchObject({
+      name: "Another Name Test",
+    });
+  });
+
+  it("should not be able to edit a customer shipper with wrong id", async () => {
+    await inMemoryClientsRepository.create(
+      makeClientShipper(
+        { name: "Custom Name" },
+        new UniqueEntityId("custom-id"),
+      ),
+    );
+
+    const result = await sut.execute({
+      id: "wrong-id",
+      name: "Another Name Test",
+    });
+
+    expect(result.isLeft()).toBe(true);
+    expect(result.value).toBeInstanceOf(ResourceNotFoundError);
+  });
+
+  it("should not be able to edit a customer shipper if the name was already stored", async () => {
+    await inMemoryClientsRepository.create(
+      makeClientShipper(
+        { name: "Custom Name 01" },
+        new UniqueEntityId("custom-id-01"),
+      ),
+    );
+
+    await inMemoryClientsRepository.create(
+      makeClientShipper(
+        { name: "Custom Name 02" },
+        new UniqueEntityId("custom-id-02"),
+      ),
+    );
+
+    const result = await sut.execute({
+      id: "custom-id-01",
+      name: "Custom Name 02",
+    });
+
+    expect(result.isLeft()).toBe(true);
+    expect(result.value).toBeInstanceOf(ResourceAlreadyStoredError);
+  });
+});
